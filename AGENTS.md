@@ -37,6 +37,19 @@ Run as MCP stdio (`npm run mcp`) or HTTP (`npm run http`, `POST /tools/:name`).
 `verdict ∈ {PASS, VIOLATION, ABSTAIN}`. A verdict is only asserted when grounded in a
 retrieved reg chunk; otherwise the tool **abstains**.
 
+### Auth & RBAC — `services/agent-python/app/auth.py`
+JWT bearer (HS256) + PBKDF2-SHA256 passwords. Roles: `operator` < `approver` < `admin`.
+| Endpoint | Access |
+|---|---|
+| `POST /auth/login` | public → `{access_token, user}` |
+| `GET /auth/me` | any authenticated |
+| `POST /plan`, `WS /ws/plan` | operator+ |
+| `POST /approve/{id}` | **approver+** (the regulated HITL gate) |
+| `GET /runs`, `/runs/{id}` | any authenticated |
+WS auth: token via `?token=` query (browsers can't set WS headers). Demo accounts are
+on the login screen / in `.env.example`. Runs durably persist to Postgres
+(`app/persistence.py`: `plan_runs` + append-only `audit_records`) when `DATABASE_URL` is set.
+
 ### Catalog & contract service — `services/catalog-csharp` (system of record)
 | Endpoint | Purpose |
 |---|---|

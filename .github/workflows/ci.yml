@@ -51,6 +51,9 @@ jobs:
         run: pip install -r services/agent-python/requirements.txt
       - name: Regenerate catalog seed
         run: python data/scripts/generate_catalog.py
+      - name: Unit tests (pytest — compliance, RBAC, graph)
+        working-directory: services/agent-python
+        run: python -m pytest
       - name: Run eval harness (gate)
         # PROVIDER_MODE=dev keeps CI on the free/heuristic path (no credits spent);
         # the gate still enforces compliance recall, grounding, and zero false-violations.

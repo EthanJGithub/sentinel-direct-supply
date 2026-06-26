@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { approve, health, runPlanStreaming } from "./api";
+import { approve, clearSession, getUser, health, runPlanStreaming, type AuthUser } from "./api";
+import Login from "./Login";
 import {
   IconAlert, IconBolt, IconBuilding, IconCheck, IconClock, IconCoin,
   IconDoc, IconHelp, IconList, IconShield,
@@ -25,6 +26,13 @@ function Pill({ kind, children }: { kind: "ok" | "warn" | "crit" | "info"; child
 const verdictKind = (v: Verdict) => (v === "PASS" ? "ok" : v === "VIOLATION" ? "crit" : "warn");
 
 export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(getUser());
+  if (!user) return <Login onLogin={setUser} />;
+  return <Console user={user} onLogout={() => { clearSession(); setUser(null); }} />;
+}
+
+function Console({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+  const canApprove = user.role === "approver" || user.role === "admin";
   const [req, setReq] = useState<PlanRequest>({
     request: PRESETS[0].req.request!, facility_name: "Cedarwood Senior Living", state: "NC",
     care_type: "memory_care", budget_usd: 480000, contract_id: "DSSI-DIRECT", plant_violation_sku: null,
@@ -37,6 +45,7 @@ export default function App() {
   const [offline, setOffline] = useState(false);
   const [env, setEnv] = useState<any>(null);
   const [approved, setApproved] = useState<any>(null);
+  const [approveErr, setApproveErr] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { health().then(setEnv).catch(() => setEnv(null)); }, []);
@@ -76,14 +85,16 @@ export default function App() {
 
   async function doApprove() {
     if (!result) return;
+    setApproveErr(null);
     if (offline) { setApproved({ status: "ORDERED", order: { id: "ord_sample", total: result.budget?.subtotal_usd, note: "offline sample" } }); return; }
-    setApproved(await approve(result.plan_id));
+    try { setApproved(await approve(result.plan_id)); }
+    catch (e: any) { setApproveErr(e.message ?? "approval failed"); }
   }
 
   return (
     <div className="app">
       <Rail env={env} onPreset={applyPreset} />
-      <TopBar req={req} env={env} offline={offline} />
+      <TopBar req={req} env={env} offline={offline} user={user} onLogout={onLogout} />
       <main className="main">
         <Composer req={req} setReq={setReq} run={run} running={running} />
         {!result && !running && <EmptyState />}
@@ -91,7 +102,8 @@ export default function App() {
           <>
             {result && <Kpis result={result} />}
             {result && result.status === "AWAITING_APPROVAL" && !approved &&
-              <Approval result={result} onApprove={doApprove} />}
+              <Approval result={result} onApprove={doApprove} canApprove={canApprove}
+                approveErr={approveErr} role={user.role} />}
             {approved && <OrderedBanner approved={approved} />}
             <Trace activeNode={activeNode} doneNodes={doneNodes} log={log} logRef={logRef} models={result?.metrics?.models} />
             {result && <Compliance findings={result.findings} />}
@@ -136,7 +148,9 @@ function Rail({ env, onPreset }: { env: any; onPreset: (p: typeof PRESETS[number
 }
 
 // ---------------- topbar ----------------
-function TopBar({ req, env, offline }: { req: PlanRequest; env: any; offline: boolean }) {
+function TopBar({ req, env, offline, user, onLogout }:
+  { req: PlanRequest; env: any; offline: boolean; user: AuthUser; onLogout: () => void }) {
+  const roleKind = user.role === "approver" ? "ok" : user.role === "admin" ? "info" : "warn";
   return (
     <header className="topbar">
       <span style={{ color: "var(--primary)" }}><IconBuilding /></span>
@@ -146,6 +160,13 @@ function TopBar({ req, env, offline }: { req: PlanRequest; env: any; offline: bo
       </div>
       <div className="spacer" />
       <span className="env-chip">{offline ? "offline sample" : env ? (env.real_models ? "PROVIDER=demo (Claude+OpenAI)" : "PROVIDER=dev (free)") : "connecting…"}</span>
+      <div className="user-box">
+        <div className="user-meta">
+          <span className="user-name">{user.name}</span>
+          <Pill kind={roleKind as any}>{user.role}</Pill>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={onLogout}>Sign out</button>
+      </div>
     </header>
   );
 }
@@ -206,8 +227,9 @@ function Kpis({ result }: { result: PlanResult }) {
   );
 }
 
-// ---------------- HITL approval ----------------
-function Approval({ result, onApprove }: { result: PlanResult; onApprove: () => void }) {
+// ---------------- HITL approval (role-gated) ----------------
+function Approval({ result, onApprove, canApprove, approveErr, role }:
+  { result: PlanResult; onApprove: () => void; canApprove: boolean; approveErr: string | null; role: string }) {
   const blocked = result.violations > 0;
   return (
     <div className={`approval${blocked ? " blocked" : ""}`}>
@@ -215,8 +237,13 @@ function Approval({ result, onApprove }: { result: PlanResult; onApprove: () => 
       <div className="a-text">
         <b>{blocked ? `${result.violations} compliance violation(s) held for your review` : "Plan validated — ready for approval"}</b>
         Human-in-the-loop checkpoint. {blocked ? "Violating items are excluded from the order; approve to place the compliant remainder." : "All items grounded in CMS / Life-Safety regulation."}
+        {!canApprove && <span className="rbac-note"> Your role (<b>{role}</b>) can review but not place orders — an <b>approver</b> must sign off.</span>}
+        {approveErr && <span className="login-err" style={{ marginTop: 6 }}>{approveErr}</span>}
       </div>
-      <button className="btn btn-ok" onClick={onApprove}>Approve &amp; place order</button>
+      <button className="btn btn-ok" onClick={onApprove} disabled={!canApprove}
+        title={canApprove ? "" : "Requires approver role"}>
+        {canApprove ? "Approve & place order" : "Approval restricted"}
+      </button>
     </div>
   );
 }

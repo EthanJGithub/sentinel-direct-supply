@@ -18,7 +18,8 @@ public static class Seeder
 
     public static async Task SeedAsync(CatalogDb db, string seedDir, ILogger log)
     {
-        await db.Database.EnsureCreatedAsync();
+        // apply EF migrations (schema is migration-managed, not EnsureCreated)
+        await db.Database.MigrateAsync();
         if (await db.Products.AnyAsync())
         {
             log.LogInformation("Catalog already seeded ({Count} products).", await db.Products.CountAsync());

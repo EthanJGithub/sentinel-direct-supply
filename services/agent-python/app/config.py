@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     # --- guardrails ---
     per_request_cost_ceiling_usd: float = float(os.getenv("COST_CEILING_USD", "0.50"))
 
+    # --- auth ---
+    jwt_secret: str = os.getenv("JWT_SECRET", "dev-secret-change-me-in-prod")
+    jwt_ttl_seconds: int = int(os.getenv("JWT_TTL_SECONDS", "28800"))  # 8h
+    cors_origins: str = os.getenv("CORS_ORIGINS", "*")
+    rate_limit_per_min: int = int(os.getenv("RATE_LIMIT_PER_MIN", "120"))
+
     # --- data paths (DATA_DIR overrides for containers where data is mounted at /data) ---
     data_dir: Path = Path(os.getenv("DATA_DIR", str(REPO_ROOT / "data")))
 

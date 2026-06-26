@@ -10,6 +10,18 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 # Request / plan inputs
 # ---------------------------------------------------------------------------
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: dict
+
+
 class PlanRequest(BaseModel):
     request: str = Field(..., description="Natural-language procurement request")
     facility_name: str = "Cedarwood Senior Living"

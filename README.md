@@ -81,6 +81,21 @@ cd ../../web/console-ts && npm install && npm run dev   # http://localhost:5173
 - **Model routing** — Haiku for routing/extraction, Opus for compliance reasoning,
   OpenAI for an independent grounding cross-check; free/heuristic fallback for dev/eval.
 
+## Enterprise hardening
+Beyond the demo, Sentinel ships the production-shaping pieces:
+- **Auth + RBAC** — JWT bearer tokens (HS256), PBKDF2-SHA256 password hashing, three
+  roles (`operator` < `approver` < `admin`). The **approver gate is the regulated
+  human-in-the-loop control**: only an approver/admin may place an order — enforced in
+  the API (`/approve` → 403 otherwise) *and* reflected in the UI. Demo accounts are on
+  the login screen.
+- **Durable persistence** — plan runs and an **append-only audit trail** are written to
+  Postgres (`plan_runs`, `audit_records`), surviving restarts; falls back to in-memory offline.
+- **Schema migrations** — the C# service is **EF-migration-managed** (not `EnsureCreated`).
+- **API hardening** — security headers, per-IP rate limiting, configurable CORS, typed
+  schema validation end-to-end.
+- **Tests** — a `pytest` suite (19 tests: compliance rules, citation-or-abstain, graph
+  e2e, RBAC) plus the MCP tool self-test, both run in CI alongside the eval gate.
+
 ## Data — real, honestly framed
 - **42 CFR §483.90** (Physical Environment) — verbatim subsections, verified against eCFR.
 - **CMS State Operations Manual, Appendix PP** — F-tag interpretive guidance (e.g. F921 71–81°F).

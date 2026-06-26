@@ -228,3 +228,41 @@ table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .muted { color: var(--ink-3); }
 .banner-note { font-size: 11.5px; color: var(--ink-3); background: var(--surface-2); border: 1px dashed var(--border);
                border-radius: 8px; padding: 8px 11px; margin-bottom: 16px; }
+
+/* ---------- auth: topbar user box ---------- */
+.user-box { display: flex; align-items: center; gap: 12px; padding-left: 14px; margin-left: 4px; border-left: 1px solid var(--border); }
+.user-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.user-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.rbac-note { display: block; margin-top: 6px; font-size: 12px; color: var(--warn); }
+
+/* ---------- login ---------- */
+.login-shell { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; background: radial-gradient(1200px 600px at 50% -10%, #e8f1f4, var(--bg)); padding: 24px; }
+.login-card { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; box-shadow: var(--shadow-lg); padding: 28px 28px 22px; }
+.login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.login-brand .logo { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #19a3ad, #0f6e8c);
+  display: grid; place-items: center; color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+.login-brand .logo svg { width: 22px; height: 22px; }
+.login-brand h1 { margin: 0; font-size: 20px; letter-spacing: .2px; }
+.login-brand .sub { font-size: 12px; color: var(--ink-3); }
+.login-lead { font-size: 12.5px; color: var(--ink-2); line-height: 1.5; margin: 0 0 18px; }
+.login-field { display: block; margin-bottom: 13px; }
+.login-field span { display: block; font-size: 11.5px; color: var(--ink-2); font-weight: 600; margin-bottom: 5px; }
+.login-field input { width: 100%; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 10px 12px; font: inherit; background: var(--surface-2); color: var(--ink); }
+.login-field input:focus { outline: 2px solid var(--primary-050); border-color: var(--primary); }
+.login-btn { width: 100%; margin-top: 4px; padding: 11px; }
+.login-err { background: var(--crit-bg); border: 1px solid var(--crit-bd); color: var(--crit);
+  border-radius: 8px; padding: 8px 11px; font-size: 12px; margin-bottom: 12px; }
+.login-demo { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 14px; }
+.login-demo-title { font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: var(--ink-3); margin-bottom: 9px; }
+.demo-row { width: 100%; display: grid; grid-template-columns: 78px 1fr auto; align-items: center; gap: 8px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 11px;
+  margin-bottom: 7px; cursor: pointer; text-align: left; transition: .12s; }
+.demo-row:hover { border-color: var(--primary); background: var(--primary-050); }
+.demo-role { font-weight: 700; font-size: 12px; color: var(--primary-700); }
+.demo-email { font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
+.demo-note { font-size: 11px; color: var(--ink-3); }
+.login-foot { font-size: 11.5px; color: var(--ink-3); }

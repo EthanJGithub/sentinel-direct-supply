@@ -43,6 +43,18 @@ Ran `docker compose up --build` on the WSL2 Docker engine. All 5 containers came
 
 These were invisible to host runs — running the real Docker stack is exactly what exposed them.
 
+## Enterprise hardening added (2026-06-26)
+Closed the gaps from the enterprise sanity check:
+- **Auth + RBAC** — JWT (HS256) + PBKDF2-SHA256 hashing; roles operator < approver < admin.
+  `/approve` requires approver+ (verified: operator → 403, approver → ORDERED). Console has
+  a login screen + role-gated approve button + sign-out. (`app/auth.py`, `Login.tsx`)
+- **Durable persistence** — `plan_runs` + append-only `audit_records` to Postgres; in-memory
+  fallback offline. (`app/persistence.py`)
+- **EF migrations** — C# service is migration-managed (InitialCreate), not EnsureCreated.
+- **Security** — headers, per-IP rate limiting, configurable CORS.
+- **Tests** — 19-test pytest suite (compliance, RBAC, graph e2e) wired into CI.
+- **WCAG 2.1 AA** — all console text now ≥4.5:1 (verified in-browser).
+
 ## The demo works right now (no keys, no Docker)
 ```bash
 cd services/agent-python && python -m app.cli --plant TRAP-NC-001   # caught -> §483.90(g)
