@@ -4,9 +4,11 @@ using Sentinel.Catalog;
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Postgres connection (Neon in the cloud, local pg in docker-compose) ---
-var conn = builder.Configuration.GetConnectionString("Catalog")
-           ?? Environment.GetEnvironmentVariable("CATALOG_DB")
-           ?? "Host=localhost;Port=5432;Database=sentinel;Username=sentinel;Password=sentinel";
+// NB: an empty ConnectionStrings:Catalog in appsettings would otherwise win over the
+// CATALOG_DB env var, so treat empty/whitespace as "not set".
+var conn = builder.Configuration.GetConnectionString("Catalog");
+if (string.IsNullOrWhiteSpace(conn)) conn = Environment.GetEnvironmentVariable("CATALOG_DB");
+if (string.IsNullOrWhiteSpace(conn)) conn = "Host=localhost;Port=5432;Database=sentinel;Username=sentinel;Password=sentinel";
 builder.Services.AddDbContext<CatalogDb>(o => o.UseNpgsql(conn));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

@@ -9,8 +9,10 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# repo root = .../sentinel-direct-supply
-REPO_ROOT = Path(__file__).resolve().parents[3]
+# repo root = .../sentinel-direct-supply on the host; in a container the app lives at
+# /app/app so the 4-levels-up path doesn't exist — fall back safely (DATA_DIR is set there).
+_PARENTS = Path(__file__).resolve().parents
+REPO_ROOT = _PARENTS[3] if len(_PARENTS) > 3 else _PARENTS[-1]
 
 
 class Settings(BaseSettings):

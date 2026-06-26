@@ -18,7 +18,9 @@ from .config import Settings
 class CatalogClient:
     def __init__(self, settings: Settings):
         self.s = settings
-        self.base = settings.catalog_url.rstrip("/") if settings.catalog_url else ""
+        url = (settings.catalog_url or "").strip()
+        # only treat as remote if it's a real http(s) URL; else fall back to local JSON
+        self.base = url.rstrip("/") if url.startswith("http") else ""
         self._local = None if self.base else _LocalCatalog(settings)
 
     def _get(self, path: str, **params) -> Any:
@@ -134,7 +136,8 @@ class _LocalCatalog:
 # ---------------------------------------------------------------------------
 class MCPClient:
     def __init__(self, settings: Settings):
-        self.base = settings.mcp_url.rstrip("/") if settings.mcp_url else ""
+        url = (settings.mcp_url or "").strip()
+        self.base = url.rstrip("/") if url.startswith("http") else ""
 
     @property
     def enabled(self) -> bool:

@@ -15,14 +15,33 @@ verified, and what's left for you.
 | **Eval harness** + golden scenarios + gate | built | `python eval/harness.py` GATE PASSED ✅ |
 | Real reg corpus (42 CFR §483.90 verbatim + Appendix PP + NFPA 101) | built | verified vs eCFR/Cornell ✅ |
 | ~290-SKU catalog + GPO pricing + 5 planted-violation traps | built | generated + seeded ✅ |
-| **Docker** (4 Dockerfiles + docker-compose) | written | not run (Docker not installed here) ⚠️ |
-| **Terraform** (ECS/RDS/S3/ECR/CloudWatch + LocalStack) | written | not `validate`d (Terraform not installed) ⚠️ |
+| **Docker** (4 Dockerfiles + docker-compose) | built + run | **full stack up; live e2e verified** ✅ (see below) |
+| **Terraform** (ECS/RDS/S3/ECR/CloudWatch + LocalStack) | written | **`terraform validate` = Success** (TF 1.15.7, AWS provider v5.100) ✅ |
 | **GitHub Actions** eval-gated CI | written | runs on push once on GitHub ⚠️ |
 | README · AGENTS.md · DEMO-SCRIPT.md | written | ✅ |
 
 Eval result (offline, dev mode): compliance recall **100%**, citation accuracy **100%**,
 grounding **100%**, false-violation rate **0**, budget adherence **100%**. Report:
 `eval/reports/latest.md`.
+
+## Live Docker stack — verified end-to-end (2026-06-26)
+Ran `docker compose up --build` on the WSL2 Docker engine. All 5 containers came up
+(db healthy), and a full `/plan → /approve` round-trip was verified live:
+- agent reports `catalog: remote` (uses the **C# service**, not the JSON fallback);
+- catalog seeded **293 products** into **Postgres**, real GPO contract pricing returned
+  (e.g. list $1,830.83 → DSSI-DIRECT $1,423.38);
+- the agent made **4 real `reg_search` calls to the TS MCP server over HTTP**;
+- planted **TRAP-NC-001 caught → 42 CFR §483.90(g)**, + 2 hallucination-gate abstentions;
+- **approve → ORDERED**, order GUID persisted via the C# service.
+
+**Five real bugs the Docker/Terraform round-trip caught (all fixed):**
+1. `config.py` used `parents[3]` → `IndexError` in-container (app at `/app/app`). Fixed (safe fallback).
+2. C# empty `ConnectionStrings:Catalog` in appsettings beat the `CATALOG_DB` env var → "Host can't be null". Fixed.
+3. C# seeder didn't map snake_case JSON (`gpo_name`, `list_price`) → not-null violation + silent $0 prices. Fixed (SnakeCaseLower).
+4. `.env.example` had inline comments; pydantic read the comment as the value → bad URL. Fixed (comments on own lines).
+5. Added URL guards in the catalog/MCP clients (only treat `http(s)://…` as remote).
+
+These were invisible to host runs — running the real Docker stack is exactly what exposed them.
 
 ## The demo works right now (no keys, no Docker)
 ```bash

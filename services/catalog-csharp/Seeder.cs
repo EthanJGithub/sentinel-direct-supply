@@ -9,6 +9,9 @@ public static class Seeder
 {
     private static readonly JsonSerializerOptions J = new()
     {
+        // seed JSON is snake_case (gpo_name, list_price, applicable_rooms); map it to
+        // the PascalCase seed records. Without this, GpoName/ListPrice deserialize null/0.
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         PropertyNameCaseInsensitive = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
     };
