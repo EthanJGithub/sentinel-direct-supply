@@ -25,6 +25,17 @@ const authHeaders = (): Record<string, string> => {
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
 
+/** On an expired/invalid token, clear the session and bounce to the login screen
+ *  (rather than silently degrading). Returns true if it handled a 401. */
+function handle401(status: number): boolean {
+  if (status === 401 && getToken()) {
+    clearSession();
+    location.reload();
+    return true;
+  }
+  return false;
+}
+
 export async function login(email: string, password: string): Promise<AuthUser> {
   const r = await fetch(`${AGENT_URL}/auth/login`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -41,8 +52,30 @@ export async function health(): Promise<any> {
   return r.json();
 }
 
+export interface RunSummary {
+  plan_id: string; tenant_id?: string; status: string; violations: number;
+  abstentions: number; cost_usd?: number; created_at?: string; user_email?: string;
+}
+
+/** List runs visible to the current user (tenant-scoped server-side). */
+export async function listRuns(): Promise<RunSummary[]> {
+  const r = await fetch(`${AGENT_URL}/runs`, { headers: { ...authHeaders() } });
+  if (handle401(r.status)) return [];
+  if (!r.ok) throw new Error(`runs ${r.status}`);
+  return r.json();
+}
+
+/** Full PlanResult for one run (404 if not in the caller's tenant). */
+export async function getRunDetail(planId: string): Promise<PlanResult> {
+  const r = await fetch(`${AGENT_URL}/runs/${planId}`, { headers: { ...authHeaders() } });
+  if (handle401(r.status)) throw new Error("session expired");
+  if (!r.ok) throw new Error(`run ${r.status}`);
+  return r.json();
+}
+
 export async function approve(planId: string): Promise<any> {
   const r = await fetch(`${AGENT_URL}/approve/${planId}`, { method: "POST", headers: { ...authHeaders() } });
+  if (handle401(r.status)) throw new Error("session expired");
   if (r.status === 403) throw new Error("forbidden: your role cannot place orders");
   return r.json();
 }
@@ -72,7 +105,11 @@ export function runPlanStreaming(
       const msg = JSON.parse(e.data);
       if (msg.type === "trace") onTrace(msg.event as TraceEvent);
       else if (msg.type === "result") { settled = true; resolve(msg.result as PlanResult); ws.close(); }
-      else if (msg.type === "error") { settled = true; reject(new Error(msg.error)); ws.close(); }
+      else if (msg.type === "error") {
+        settled = true; ws.close();
+        if (String(msg.error).includes("unauthorized") && getToken()) { clearSession(); location.reload(); }
+        reject(new Error(msg.error));
+      }
     };
     ws.onerror = () => {
       if (!settled) { clearTimeout(failTimer); settled = true; restFallback(req).then(resolve, reject); }
@@ -85,6 +122,7 @@ async function restFallback(req: PlanRequest): Promise<PlanResult> {
     method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(req),
   });
+  if (handle401(r.status)) throw new Error("session expired");
   if (!r.ok) throw new Error(`agent error ${r.status}`);
   return r.json();
 }

@@ -84,12 +84,13 @@ cd ../../web/console-ts && npm install && npm run dev   # http://localhost:5173
 ## Enterprise hardening
 Beyond the demo, Sentinel ships the production-shaping pieces — all verified on the
 live `docker compose` stack:
-- **Auth + RBAC** — JWT (HS256) bearer tokens, PBKDF2-SHA256 password hashing, three
-  roles (`operator` < `approver` < `admin`). The **approver gate is the regulated
-  human-in-the-loop control**: only an approver/admin may place an order — enforced in
-  the agent API, **independently re-validated by the C# system-of-record** (it now
-  requires an approver JWT on `place_order`, forwarded by the agent), and reflected in
-  the UI. Demo accounts are on the login screen.
+- **Auth + RBAC + approval workflow** — JWT (HS256) bearer tokens, PBKDF2-SHA256 password
+  hashing, three roles (`operator` < `approver` < `admin`). An **operator** submits a plan
+  → it lands in an **Approval queue**; an **approver** reviews it and places the order (the
+  regulated human-in-the-loop gate). Enforced in the agent API, **independently re-validated
+  by the C# system-of-record** (it requires an approver JWT on `place_order`, forwarded by
+  the agent), and reflected in the console (login, role-gated approve, the queue, sign-out;
+  an expired token bounces to login). Demo accounts are on the login screen.
 - **Multi-tenancy** — every JWT, run, and audit record carries a `tenant_id`; reads are
   tenant-scoped (a Cedarwood operator never sees Maplewood's runs); `admin` is
   cross-tenant. Demonstrated with two facilities + an admin.

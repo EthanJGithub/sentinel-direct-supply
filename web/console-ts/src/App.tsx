@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { approve, clearSession, getUser, health, runPlanStreaming, type AuthUser } from "./api";
+import {
+  approve, clearSession, getRunDetail, getUser, health, listRuns,
+  runPlanStreaming, type AuthUser, type RunSummary,
+} from "./api";
 import Login from "./Login";
 import {
   IconAlert, IconBolt, IconBuilding, IconCheck, IconClock, IconCoin,
@@ -33,6 +36,7 @@ export default function App() {
 
 function Console({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const canApprove = user.role === "approver" || user.role === "admin";
+  const [view, setView] = useState<"compose" | "queue">("compose");
   const [req, setReq] = useState<PlanRequest>({
     request: PRESETS[0].req.request!, facility_name: "Cedarwood Senior Living", state: "NC",
     care_type: "memory_care", budget_usd: 480000, contract_id: "DSSI-DIRECT", plant_violation_sku: null,
@@ -46,13 +50,21 @@ function Console({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [env, setEnv] = useState<any>(null);
   const [approved, setApproved] = useState<any>(null);
   const [approveErr, setApproveErr] = useState<string | null>(null);
+  const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [queueDetail, setQueueDetail] = useState<PlanResult | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { health().then(setEnv).catch(() => setEnv(null)); }, []);
   useEffect(() => { logRef.current?.scrollTo(0, logRef.current.scrollHeight); }, [log]);
+  const refreshRuns = () => listRuns().then(setRuns).catch(() => setRuns([]));
+  useEffect(() => { refreshRuns(); }, []);
+  // refresh the queue whenever a plan is generated or approved
+  useEffect(() => { if (result || approved) refreshRuns(); }, [result?.plan_id, approved]);
+  const pending = runs.filter((r) => r.status === "AWAITING_APPROVAL").length;
 
   function applyPreset(p: typeof PRESETS[number]) {
     setReq((r) => ({ ...r, ...p.req }));
+    setView("compose");
   }
 
   async function run() {
@@ -93,36 +105,55 @@ function Console({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
 
   return (
     <div className="app">
-      <Rail env={env} onPreset={applyPreset} />
+      <Rail env={env} onPreset={applyPreset} view={view} setView={setView} pending={pending} />
       <TopBar req={req} env={env} offline={offline} user={user} onLogout={onLogout} />
       <main className="main">
-        <Composer req={req} setReq={setReq} run={run} running={running} />
-        {!result && !running && <EmptyState />}
-        {(running || result) && (
+        {view === "compose" ? (
           <>
-            {result && <Kpis result={result} />}
-            {result && result.status === "AWAITING_APPROVAL" && !approved &&
-              <Approval result={result} onApprove={doApprove} canApprove={canApprove}
-                approveErr={approveErr} role={user.role} />}
-            {approved && <OrderedBanner approved={approved} />}
-            <Trace activeNode={activeNode} doneNodes={doneNodes} log={log} logRef={logRef} models={result?.metrics?.models} />
-            {result && <Compliance findings={result.findings} />}
-            {result && <Cart result={result} />}
+            <Composer req={req} setReq={setReq} run={run} running={running} />
+            {!result && !running && <EmptyState />}
+            {(running || result) && (
+              <>
+                {result && <Kpis result={result} />}
+                {result && result.status === "AWAITING_APPROVAL" && !approved &&
+                  <Approval result={result} onApprove={doApprove} canApprove={canApprove}
+                    approveErr={approveErr} role={user.role} onGoToQueue={() => setView("queue")} />}
+                {approved && <OrderedBanner approved={approved} />}
+                <Trace activeNode={activeNode} doneNodes={doneNodes} log={log} logRef={logRef} models={result?.metrics?.models} />
+                {result && <Compliance findings={result.findings} />}
+                {result && <Cart result={result} />}
+              </>
+            )}
           </>
+        ) : (
+          <Requests user={user} canApprove={canApprove} runs={runs} refresh={refreshRuns}
+            onSelect={setQueueDetail} />
         )}
       </main>
-      <Aside result={result} offline={offline} />
+      <Aside result={view === "queue" ? queueDetail : result} offline={offline} />
     </div>
   );
 }
 
 // ---------------- left rail ----------------
-function Rail({ env, onPreset }: { env: any; onPreset: (p: typeof PRESETS[number]) => void }) {
+function Rail({ env, onPreset, view, setView, pending }:
+  { env: any; onPreset: (p: typeof PRESETS[number]) => void;
+    view: "compose" | "queue"; setView: (v: "compose" | "queue") => void; pending: number }) {
   return (
     <aside className="rail">
       <div className="brand">
         <span className="logo" style={{ color: "#fff" }}><IconShield /></span>
         <div><h1>Sentinel</h1><div className="sub">Procurement &amp; Compliance</div></div>
+      </div>
+      <div className="rail-section">
+        <h3>Workspace</h3>
+        <button className={`nav-item${view === "compose" ? " active" : ""}`} onClick={() => setView("compose")}>
+          <IconDoc /><span>New request</span>
+        </button>
+        <button className={`nav-item${view === "queue" ? " active" : ""}`} onClick={() => setView("queue")}>
+          <IconList /><span>Approval queue</span>
+          {pending > 0 && <span className="nav-badge">{pending}</span>}
+        </button>
       </div>
       <div className="rail-section">
         <h3>Facility</h3>
@@ -228,8 +259,9 @@ function Kpis({ result }: { result: PlanResult }) {
 }
 
 // ---------------- HITL approval (role-gated) ----------------
-function Approval({ result, onApprove, canApprove, approveErr, role }:
-  { result: PlanResult; onApprove: () => void; canApprove: boolean; approveErr: string | null; role: string }) {
+function Approval({ result, onApprove, canApprove, approveErr, role, onGoToQueue }:
+  { result: PlanResult; onApprove: () => void; canApprove: boolean; approveErr: string | null;
+    role: string; onGoToQueue?: () => void }) {
   const blocked = result.violations > 0;
   return (
     <div className={`approval${blocked ? " blocked" : ""}`}>
@@ -237,13 +269,14 @@ function Approval({ result, onApprove, canApprove, approveErr, role }:
       <div className="a-text">
         <b>{blocked ? `${result.violations} compliance violation(s) held for your review` : "Plan validated — ready for approval"}</b>
         Human-in-the-loop checkpoint. {blocked ? "Violating items are excluded from the order; approve to place the compliant remainder." : "All items grounded in CMS / Life-Safety regulation."}
-        {!canApprove && <span className="rbac-note"> Your role (<b>{role}</b>) can review but not place orders — an <b>approver</b> must sign off.</span>}
+        {!canApprove && <span className="rbac-note"> Submitted to the <b>approval queue</b> as request <code>{result.plan_id}</code>. Your role (<b>{role}</b>) can review but not place orders — an <b>approver</b> must sign off.</span>}
         {approveErr && <span className="login-err" style={{ marginTop: 6 }}>{approveErr}</span>}
       </div>
-      <button className="btn btn-ok" onClick={onApprove} disabled={!canApprove}
-        title={canApprove ? "" : "Requires approver role"}>
-        {canApprove ? "Approve & place order" : "Approval restricted"}
-      </button>
+      {canApprove
+        ? <button className="btn btn-ok" onClick={onApprove}>Approve &amp; place order</button>
+        : onGoToQueue
+          ? <button className="btn btn-ghost" onClick={onGoToQueue} title="Open the approval queue">View in queue →</button>
+          : null}
     </div>
   );
 }
@@ -298,6 +331,90 @@ const nodeBlurb = (n: string) => ({
   Compliance: "reg_search + validate_item · citation-or-abstain", Budget: "constraint solve vs budget",
   Audit: "immutable decision record",
 }[n] ?? "");
+
+// ---------------- approval queue ----------------
+const statusKind = (s: string): "ok" | "warn" | "crit" | "info" =>
+  s === "ORDERED" ? "ok" : s === "AWAITING_APPROVAL" ? "warn" : "info";
+
+function Requests({ user, canApprove, runs, refresh, onSelect }:
+  { user: AuthUser; canApprove: boolean; runs: RunSummary[]; refresh: () => void;
+    onSelect: (r: PlanResult | null) => void }) {
+  const [detail, setDetail] = useState<PlanResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [approved, setApproved] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function open(planId: string) {
+    setLoading(true); setErr(null); setApproved(null);
+    try { const d = await getRunDetail(planId); setDetail(d); onSelect(d); }
+    catch (e: any) { setErr(e.message); }
+    finally { setLoading(false); }
+  }
+  function back() { setDetail(null); onSelect(null); setApproved(null); setErr(null); }
+
+  async function doApprove() {
+    if (!detail) return;
+    setErr(null);
+    try { const r = await approve(detail.plan_id); setApproved(r); refresh(); await open(detail.plan_id); }
+    catch (e: any) { setErr(e.message ?? "approval failed"); }
+  }
+
+  if (detail) {
+    const ordered = !!approved || detail.status === "ORDERED";
+    return (
+      <>
+        <div className="queue-bar">
+          <button className="btn btn-ghost btn-sm" onClick={back}>← Back to queue</button>
+          <span className="sku">request {detail.plan_id}</span>
+        </div>
+        <Kpis result={detail} />
+        {ordered
+          ? <OrderedBanner approved={approved ?? { status: "ORDERED", order: { id: "(persisted)", total: detail.budget?.subtotal_usd } }} />
+          : canApprove
+            ? <Approval result={detail} onApprove={doApprove} canApprove approveErr={err} role={user.role} />
+            : <Approval result={detail} onApprove={() => {}} canApprove={false} approveErr={err} role={user.role} />}
+        <Compliance findings={detail.findings} />
+        <Cart result={detail} />
+      </>
+    );
+  }
+
+  return (
+    <div className="card">
+      <header><span style={{ color: "var(--primary)" }}><IconList /></span><h2>Approval queue</h2>
+        <span className="hint">requests in your tenant{user.role === "admin" ? " (all tenants)" : ""}</span>
+        <span className="spacer" />
+        <button className="btn btn-ghost btn-sm" onClick={refresh}>Refresh</button></header>
+      <div className="body tight">
+        {runs.length === 0 && (
+          <div className="empty"><IconList />
+            <div className="muted">No requests yet. Generate a plan from “New request”.</div></div>)}
+        {runs.length > 0 && (
+          <table className="grid">
+            <thead><tr><th>Request</th>{user.role === "admin" && <th>Tenant</th>}
+              <th>Status</th><th className="num">Violations</th><th className="num">Cost</th><th></th></tr></thead>
+            <tbody>
+              {runs.map((r) => (
+                <tr key={r.plan_id}>
+                  <td className="sku">{r.plan_id}</td>
+                  {user.role === "admin" && <td className="muted">{r.tenant_id}</td>}
+                  <td><Pill kind={statusKind(r.status)}>
+                    {r.status === "AWAITING_APPROVAL" ? "pending" : r.status.toLowerCase()}</Pill></td>
+                  <td className="num">{r.violations}</td>
+                  <td className="num">{r.cost_usd != null ? "$" + r.cost_usd.toFixed(4) : "—"}</td>
+                  <td><button className="btn btn-ghost btn-sm" onClick={() => open(r.plan_id)}>
+                    {r.status === "AWAITING_APPROVAL" && canApprove ? "Review & approve" : "View"}</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {loading && <div className="muted" style={{ padding: 12 }}>Loading…</div>}
+        {err && <div className="login-err" style={{ margin: 12 }}>{err}</div>}
+      </div>
+    </div>
+  );
+}
 
 // ---------------- compliance ----------------
 function Compliance({ findings }: { findings: ComplianceFinding[] }) {
