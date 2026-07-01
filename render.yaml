@@ -14,9 +14,8 @@ services:
     dockerContext: .
     plan: free
     healthCheckPath: /health
-    envVarGroups:
-      - sentinel-secrets
     envVars:
+      - fromGroup: sentinel-secrets   # shared JWT_SECRET (see envVarGroups below)
       - key: CATALOG_DB          # Neon connection string, Npgsql format — paste at setup
         sync: false
       - key: ASPNETCORE_URLS
@@ -37,9 +36,8 @@ services:
     dockerContext: .
     plan: free
     healthCheckPath: /health
-    envVarGroups:
-      - sentinel-secrets
     envVars:
+      - fromGroup: sentinel-secrets   # shared JWT_SECRET (see envVarGroups below)
       - key: DATABASE_URL         # Neon connection string, postgres:// format — paste at setup
         sync: false
       - key: CATALOG_URL
