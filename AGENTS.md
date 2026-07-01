@@ -81,8 +81,18 @@ Rule engine: `services/agent-python/app/compliance.py` (mirrored in `mcp-tools-t
 
 ## Provider routing — `services/agent-python/app/providers/router.py`
 Capabilities, not vendors: `plan_spec` (Haiku) · `compliance_rationale` (Opus) ·
-`grounding_check` (OpenAI cross-check). No keys / `PROVIDER_MODE=dev` → deterministic
-heuristic provider ($0). Cost + latency tracked per node/model in `monitoring.py`.
+`grounding_check` (OpenAI cross-check). Three-tier fallback per capability:
+**Anthropic/OpenAI (paid, real)** → **Groq (`GROQ_API_KEY`, free tier, real LLM, $0)**
+→ **deterministic heuristic** ($0, offline). No keys / `PROVIDER_MODE=dev` → heuristic.
+
+**Why Planner doesn't use Groq:** the eval harness caught a real regression when the
+structured procurement spec was routed through Groq's small free model
+(`llama-3.1-8b-instant`) — it occasionally dropped a category from the room
+breakdown, lowering `plan_completeness` below the eval gate. Structured planning
+needs guaranteed category coverage, so it stays on the deterministic heuristic
+unless Anthropic is configured; Groq is used only for `compliance_rationale` and
+`grounding_check`, where natural-language variance is safe (both are still enforced
+by the hallucination gate). Cost + latency tracked per node/model in `monitoring.py`.
 
 ## Run it / change it
 - Offline graph: `cd services/agent-python && python -m app.cli --plant TRAP-NC-001`

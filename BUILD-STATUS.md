@@ -15,10 +15,35 @@ verified, and what's left for you.
 | **Eval harness** + golden scenarios + gate | built | `python eval/harness.py` GATE PASSED ✅ |
 | Real reg corpus (42 CFR §483.90 verbatim + Appendix PP + NFPA 101) | built | verified vs eCFR/Cornell ✅ |
 | ~290-SKU catalog + GPO pricing + 5 planted-violation traps | built | generated + seeded ✅ |
-| **Docker** (4 Dockerfiles + docker-compose) | built + run | **full stack up; live e2e verified** ✅ (see below) |
+| **Docker** (4 Dockerfiles, repo-root context, data baked in) | built + run | **standalone deploy verified** ✅ (see below) |
 | **Terraform** (ECS/RDS/S3/ECR/CloudWatch + LocalStack) | written | **`terraform validate` = Success** (TF 1.15.7, AWS provider v5.100) ✅ |
 | **GitHub Actions** eval-gated CI | written | runs on push once on GitHub ⚠️ |
+| **Groq provider** (free-tier real LLM for reason + cross_check) | built | eval GATE PASSED with real Groq calls ✅ |
+| **DEPLOY.md** — Neon + Render/Fly + Vercel runbook | written | ✅ |
 | README · AGENTS.md · DEMO-SCRIPT.md | written | ✅ |
+
+## Deploy-readiness pass (2026-07-01) — the standalone-deploy blocker is fixed
+Found and fixed the one real gap before a cloud deploy: **the Dockerfiles only worked
+under `docker-compose`'s volume mount** — a standalone image (as Render/Fly would build
+it) had an empty `/data`, so the catalog seeded nothing and the RAG corpus was missing.
+Fixed by moving the build context to the **repo root** for all three service
+Dockerfiles (`COPY data /data` bakes the seed + corpus into the image itself);
+`docker-compose.yml` updated to match. **Verified with zero volume mount**, against a
+fresh standalone Postgres with no shared network from compose:
+- catalog seeded **293 SKUs across 12 categories** into a brand-new Postgres instance;
+- MCP served `reg_search`/`validate_item`/etc. with no data volume;
+- agent ran a full plan (planted violation caught) using only baked-in data.
+
+Also wired **Groq** (the same free-tier account used by CredAgent/FraudPulse) as a
+real, $0 LLM tier between paid Anthropic/OpenAI and the deterministic heuristic. The
+eval harness caught a real regression on the first pass — routing the *structured
+Planner* through Groq's small free model (`llama-3.1-8b-instant`) dropped
+`plan_completeness` to 94.47% (gate threshold 95%) because the model occasionally
+omitted a category from the room breakdown. Fixed by keeping the Planner
+deterministic (heuristic) and using Groq only for **compliance rationale** and the
+**grounding cross-check** — both natural-language capabilities where its variance is
+safe and still passes the hallucination gate. Re-ran: **GATE PASSED**, 6/6 metrics,
+with genuine LLM calls in the loop, still $0.
 
 Eval result (offline, dev mode): compliance recall **100%**, citation accuracy **100%**,
 grounding **100%**, false-violation rate **0**, budget adherence **100%**. Report:

@@ -25,7 +25,9 @@ services:
       retries: 12
 
   catalog:
-    build: ./services/catalog-csharp
+    build:
+      context: .
+      dockerfile: services/catalog-csharp/Dockerfile
     environment:
       CATALOG_DB: "Host=db;Port=5432;Database=sentinel;Username=sentinel;Password=sentinel"
       SEED_DIR: /data/catalog
@@ -39,7 +41,9 @@ services:
         condition: service_healthy
 
   mcp:
-    build: ./services/mcp-tools-ts
+    build:
+      context: .
+      dockerfile: services/mcp-tools-ts/Dockerfile
     environment:
       DATA_DIR: /data
       PORT: "7100"
@@ -48,7 +52,9 @@ services:
     ports: ["7100:7100"]
 
   agent:
-    build: ./services/agent-python
+    build:
+      context: .
+      dockerfile: services/agent-python/Dockerfile
     env_file: [.env]
     environment:
       DATA_DIR: /data

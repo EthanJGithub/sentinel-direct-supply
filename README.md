@@ -51,9 +51,13 @@ it with a citation while the gate blocks an ungrounded claim.**
 
 ### Full stack (Docker)
 ```bash
-cp .env.example .env          # optional: add ANTHROPIC_API_KEY / OPENAI_API_KEY for the real run
+cp .env.example .env          # optional: add ANTHROPIC_API_KEY / OPENAI_API_KEY / GROQ_API_KEY
 docker compose up --build      # console → http://localhost:5173
 ```
+Every service Dockerfile bakes the catalog seed + regulation corpus into the image
+(build context is the repo root — see `docker-compose.yml`), so each container is
+self-contained and deployable standalone (Render/Fly), not just via compose. See
+[`DEPLOY.md`](DEPLOY.md) for the full cloud deploy runbook (Neon + Render/Fly + Vercel).
 
 ### No Docker? Everything runs offline, $0, no keys
 ```bash
@@ -79,7 +83,11 @@ cd ../../web/console-ts && npm install && npm run dev   # http://localhost:5173
 - **Eval-gated CI** (`.github/workflows/ci.yml`) — a regression in compliance recall
   **blocks the deploy**.
 - **Model routing** — Haiku for routing/extraction, Opus for compliance reasoning,
-  OpenAI for an independent grounding cross-check; free/heuristic fallback for dev/eval.
+  OpenAI for an independent grounding cross-check. Three-tier fallback per capability:
+  **Anthropic/OpenAI (paid, real)** → **Groq (free tier, genuine LLM reasoning, $0)**
+  → **deterministic heuristic** (also $0, offline). Set `GROQ_API_KEY` to get real
+  model reasoning with zero spend — the same free account used across the author's
+  other portfolio apps (CredAgent, FraudPulse).
 
 ## Enterprise hardening
 Beyond the demo, Sentinel ships the production-shaping pieces — all verified on the

@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     model_reason: str = os.getenv("MODEL_REASON", "claude-opus-4-8")
     model_route: str = os.getenv("MODEL_ROUTE", "claude-haiku-4-5-20251001")
     model_embed: str = os.getenv("MODEL_EMBED", "text-embedding-3-small")
+    # Groq (free tier, OpenAI-compatible) — the $0 "real model" path for dev/local demos
+    groq_model: str = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
     # --- peer services ---
     catalog_url: str = os.getenv("CATALOG_URL", "")          # C# service; empty -> JSON fallback
