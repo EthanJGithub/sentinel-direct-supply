@@ -4,12 +4,43 @@ with no peer services up (offline demo + eval)."""
 from __future__ import annotations
 
 import json
+import time
 from functools import lru_cache
 from typing import Any, Optional
 
 import httpx
 
 from .config import Settings
+
+# Render free-tier peer services spin down after ~15 min idle and come back with a
+# genuine 502 Bad Gateway (the proxy is up, the app isn't yet) for several seconds
+# during cold start — not a slow response, a hard error. Without a retry here, the
+# very first live request after idle time kills the graph immediately regardless
+# of demo mode, which looked like "every request returns the same offline sample."
+_RETRY_STATUS = {502, 503, 504}
+_RETRY_DELAYS_S = [2, 4, 8, 8, 8]  # ~30s total, well under Render's typical cold-start window
+
+
+def _with_retries(fn):
+    """Retry a zero-arg request callable on cold-start 502/503/504 or connect errors."""
+    last_exc: Exception | None = None
+    for i, delay in enumerate([0, *_RETRY_DELAYS_S]):
+        if delay:
+            time.sleep(delay)
+        try:
+            r = fn()
+            if r.status_code in _RETRY_STATUS and i < len(_RETRY_DELAYS_S):
+                last_exc = httpx.HTTPStatusError(
+                    f"{r.status_code} (cold start, retrying)", request=r.request, response=r
+                )
+                continue
+            r.raise_for_status()
+            return r
+        except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+            last_exc = e
+            if i >= len(_RETRY_DELAYS_S):
+                raise
+    raise last_exc  # pragma: no cover - only reached if the loop above didn't return/raise
 
 
 # ---------------------------------------------------------------------------
@@ -25,8 +56,7 @@ class CatalogClient:
 
     def _get(self, path: str, **params) -> Any:
         with httpx.Client(timeout=20) as c:
-            r = c.get(f"{self.base}{path}", params=params)
-            r.raise_for_status()
+            r = _with_retries(lambda: c.get(f"{self.base}{path}", params=params))
             return r.json()
 
     def search(self, *, category: str, room: Optional[str] = None, limit: int = 50) -> list[dict]:
@@ -38,8 +68,8 @@ class CatalogClient:
         if self._local:
             return self._local.price(skus, contract_id)
         with httpx.Client(timeout=20) as c:
-            r = c.post(f"{self.base}/api/contract/price", json={"skus": skus, "contractId": contract_id})
-            r.raise_for_status()
+            r = _with_retries(lambda: c.post(f"{self.base}/api/contract/price",
+                                              json={"skus": skus, "contractId": contract_id}))
             return r.json()
 
     def get(self, sku: str) -> Optional[dict]:
@@ -61,9 +91,8 @@ class CatalogClient:
             return self._local.place_order(plan_id, facility, lines)
         headers = {"Authorization": f"Bearer {bearer}"} if bearer else {}
         with httpx.Client(timeout=20) as c:
-            r = c.post(f"{self.base}/api/orders", headers=headers,
-                       json={"planId": plan_id, "facilityName": facility, "lines": lines})
-            r.raise_for_status()
+            r = _with_retries(lambda: c.post(f"{self.base}/api/orders", headers=headers,
+                       json={"planId": plan_id, "facilityName": facility, "lines": lines}))
             return r.json()
 
 
@@ -147,13 +176,11 @@ class MCPClient:
 
     def reg_search(self, query: str, categories: list[str], k: int = 4) -> list[dict]:
         with httpx.Client(timeout=15) as c:
-            r = c.post(f"{self.base}/tools/reg_search",
-                       json={"query": query, "categories": categories, "k": k})
-            r.raise_for_status()
+            r = _with_retries(lambda: c.post(f"{self.base}/tools/reg_search",
+                       json={"query": query, "categories": categories, "k": k}))
             return r.json().get("results", [])
 
     def validate_item(self, item: dict) -> dict:
         with httpx.Client(timeout=15) as c:
-            r = c.post(f"{self.base}/tools/validate_item", json=item)
-            r.raise_for_status()
+            r = _with_retries(lambda: c.post(f"{self.base}/tools/validate_item", json=item))
             return r.json()
